@@ -33,7 +33,10 @@ self_check() {
     if [ -n "$fb" ]; then
         echo "    [ok] PiTFT framebuffer at $fb (320x240)"
         if [ -f "$CONF" ]; then
-            local want; want=$(grep -E '^TFT_FB=' "$CONF" | cut -d= -f2 | tr -d ' ')
+            # value after '=', strip inline '# comment', then trim whitespace
+            local want
+            want=$(grep -E '^TFT_FB=' "$CONF" | head -1 | cut -d= -f2- \
+                   | sed 's/#.*//' | xargs 2>/dev/null || true)
             if [ -n "$want" ] && [ "$want" != "$fb" ]; then
                 echo "    [WARN] tft.conf has TFT_FB=$want but the 320x240 panel is $fb"
                 echo "           edit $CONF and set TFT_FB=$fb"
