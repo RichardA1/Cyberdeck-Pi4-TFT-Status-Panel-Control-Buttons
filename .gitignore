@@ -1,0 +1,4 @@
+# TFT addon
+__pycache__/
+*.pyc
+/tmp/panel*.png

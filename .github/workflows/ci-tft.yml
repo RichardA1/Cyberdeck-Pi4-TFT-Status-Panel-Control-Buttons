@@ -1,0 +1,75 @@
+# Standalone CI for the TFT panel addon. Kept separate from the base project's
+# ci.yml so it can be dropped in without editing existing workflows. Runs only
+# when addon files change.
+name: TFT Panel Addon CI
+
+on:
+  push:
+    paths:
+      - 'scripts/tft/**'
+      - 'scripts/lowpower.sh'
+      - 'scripts/install-tft.sh'
+      - 'scripts/uninstall-tft.sh'
+      - 'config/tft.conf'
+      - 'config/cyberdeck-panel.service'
+      - 'config/button-aux.sh.example'
+      - '.github/workflows/ci-tft.yml'
+  pull_request:
+    paths:
+      - 'scripts/tft/**'
+      - 'scripts/lowpower.sh'
+      - 'scripts/install-tft.sh'
+      - 'scripts/uninstall-tft.sh'
+      - 'config/tft.conf'
+
+jobs:
+  tft-shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck TFT scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck scripts/lowpower.sh scripts/install-tft.sh \
+                     scripts/uninstall-tft.sh config/button-aux.sh.example
+
+  tft-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install pyflakes
+      - run: python -m compileall -q scripts/tft
+      - run: pyflakes scripts/tft/*.py
+
+  tft-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install render deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil fonts-dejavu-core
+      - name: Render panel variants
+        run: |
+          cd scripts/tft
+          TFT_STUB=1 TFT_PNG=/tmp/panel-nobatt.png python3 cyberdeck_panel.py
+          TFT_STUB=1 TFT_STUB_BATTERY='{"percent":62,"charging":false,"volts":3.9}' \
+            TFT_PNG=/tmp/panel-batt.png python3 cyberdeck_panel.py
+          TFT_STUB=1 TFT_STUB_BATTERY='{"percent":8,"charging":true}' \
+            TFT_PNG=/tmp/panel-low.png python3 cyberdeck_panel.py
+      - name: Assert dimensions
+        run: |
+          python3 - <<'PY'
+          from PIL import Image
+          for f in ("nobatt", "batt", "low"):
+              im = Image.open(f"/tmp/panel-{f}.png")
+              assert im.size == (320, 240), (f, im.size)
+              assert im.convert("RGB").getcolors(maxcolors=1) is None, f"{f} is a flat frame"
+          print("panel renders OK")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tft-panel-previews
+          path: /tmp/panel-*.png

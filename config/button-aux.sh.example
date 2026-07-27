@@ -1,0 +1,13 @@
+#!/bin/bash
+# Copy to /etc/cyberdeck-pi4/button-aux.sh and chmod +x to activate the AUX button.
+# Runs as root, from the button daemon's worker thread. Keep it under ~10 seconds.
+#
+# Ideas: toggle bridge mode, publish a retained MQTT message, cycle WLED presets,
+# rotate the panel, capture a screenshot, restart mosquitto.
+#
+# Example — toggle the internet bridge:
+# /opt/cyberdeck-pi4/scripts/bridge-mode.sh status | grep -q bridged \
+#     && /opt/cyberdeck-pi4/scripts/bridge-mode.sh disable \
+#     || /opt/cyberdeck-pi4/scripts/bridge-mode.sh enable
+
+echo "AUX button pressed"

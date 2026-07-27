@@ -1,0 +1,19 @@
+[Unit]
+Description=Cyberdeck TFT panel and button daemon
+Documentation=file:/opt/cyberdeck-pi4/docs/TFT_PANEL.md
+After=multi-user.target cyberdeck-pi4.service
+Wants=cyberdeck-pi4.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cyberdeck-pi4/tft
+Environment=PYTHONUNBUFFERED=1
+Environment=GPIOZERO_PIN_FACTORY=lgpio
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/python3 /opt/cyberdeck-pi4/tft/button_daemon.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

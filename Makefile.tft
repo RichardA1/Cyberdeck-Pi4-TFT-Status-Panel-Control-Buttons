@@ -1,0 +1,23 @@
+# Makefile.tft — convenience targets for the TFT panel addon.
+# Merge these into the repo's top-level Makefile, or use directly:
+#     make -f Makefile.tft install
+.PHONY: tft-install tft-uninstall tft-check tft-preview tft-lint
+
+tft-install:              ## install + enable the panel/button daemon on the Pi
+	sudo ./scripts/install-tft.sh
+
+tft-uninstall:            ## remove the addon, leave the base project alone
+	sudo ./scripts/uninstall-tft.sh
+
+tft-check:               ## post-install self-check (framebuffer, deps, service)
+	sudo ./scripts/install-tft.sh --check
+
+tft-preview:             ## render the panel to /tmp/panel.png (no hardware needed)
+	cd scripts/tft && TFT_STUB=1 TFT_PNG=/tmp/panel.png python3 cyberdeck_panel.py
+	@echo "wrote /tmp/panel.png"
+
+tft-lint:                ## shellcheck + python compile/lint, same as CI
+	shellcheck scripts/lowpower.sh scripts/install-tft.sh \
+	           scripts/uninstall-tft.sh config/button-aux.sh.example
+	python3 -m compileall -q scripts/tft
+	@command -v pyflakes >/dev/null && pyflakes scripts/tft/*.py || true
