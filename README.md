@@ -6,7 +6,7 @@ A local hardware control surface for the **Cyberdeck Pi4**: a 320×240 status pa
 an Adafruit 2.8" PiTFT, plus four hardware buttons — no client device, keyboard, or SSH
 session needed to see status or control the deck.
 
-<img width="320" height="240" alt="panel_preview" src="https://github.com/user-attachments/assets/2ca8fc4f-a763-4448-8352-b557edfbf8d7" />
+<center><img width="320" height="240" alt="panel_preview" src="https://github.com/user-attachments/assets/2ca8fc4f-a763-4448-8352-b557edfbf8d7" /><center/>
 
 The panel is styled to match the Cyberdeck web UI, so the physical screen and the browser
 dashboard read as the same product.
