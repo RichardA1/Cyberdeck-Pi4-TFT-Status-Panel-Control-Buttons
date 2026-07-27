@@ -131,15 +131,51 @@ def act_shutdown():
     global _halting
     _halting = True
     log.warning("shutdown confirmed via GPIO %d", BTN_SHUTDOWN)
-    _stop.set()                                  # stop the refresh loop overdrawing
+    # Launch the shutdown command FIRST. Do not touch _stop here: setting it
+    # would unblock main(), which exits the process and lets systemd tear the
+    # daemon down before this function reaches the Popen — the command would
+    # never run. _halting freezes the refresh loop instead; the OS halt (or the
+    # test command) then brings the process down on its own terms.
+    subprocess.Popen(SHUTDOWN_CMD, shell=True)
     with _state_lock:
         state = _last_state
     try:
         panel.draw_overlay("SYSTEM", ["SHUTTING", "DOWN"], panel.C_RED, state)
     except Exception:
         log.exception("could not draw shutdown screen")
-    time.sleep(1.0)
-    subprocess.Popen(SHUTDOWN_CMD, shell=True)
+
+
+# Manual hold detection for the shutdown button.
+#
+# gpiozero's own `when_held` does not fire reliably when `bounce_time` and
+# `hold_time` are set on the same Button under gpiozero 2.x + the lgpio backend
+# (the debounce keeps resetting the hold thread's activation timer). We time the
+# hold ourselves with a plain Timer started on press and cancelled on release, so
+# it is independent of the backend. Releasing before HOLD_SEC cancels it; a bounce
+# mid-hold just restarts the count — both fail safe (no shutdown).
+_hold_timer = None
+_hold_lock = threading.Lock()
+
+
+def on_shutdown_pressed():
+    global _hold_timer
+    if _halting:
+        return
+    _jobs.put(act_shutdown_hint)
+    with _hold_lock:
+        if _hold_timer is not None:
+            _hold_timer.cancel()
+        _hold_timer = threading.Timer(HOLD_SEC, lambda: _jobs.put(act_shutdown))
+        _hold_timer.daemon = True
+        _hold_timer.start()
+
+
+def on_shutdown_released():
+    global _hold_timer
+    with _hold_lock:
+        if _hold_timer is not None:
+            _hold_timer.cancel()
+            _hold_timer = None
 
 
 # --------------------------------------------------------------------------
@@ -173,7 +209,9 @@ def refresh_loop():
             state["backlight"] = backlight.is_lit
             with _state_lock:
                 _last_state = state
-            if time.monotonic() >= _overlay_until and backlight.is_lit:
+            if _halting:
+                pass                              # leave the SHUTTING DOWN screen alone
+            elif time.monotonic() >= _overlay_until and backlight.is_lit:
                 panel.draw_panel(state)
         except Exception:
             log.exception("refresh failed")
@@ -187,14 +225,14 @@ backlight = LED(BACKLIGHT_PIN, initial_value=True)
 btn_backlight = Button(BTN_BACKLIGHT, pull_up=True, bounce_time=BOUNCE)
 btn_power     = Button(BTN_POWER, pull_up=True, bounce_time=BOUNCE)
 btn_aux       = Button(BTN_AUX, pull_up=True, bounce_time=BOUNCE)
-btn_shutdown  = Button(BTN_SHUTDOWN, pull_up=True, bounce_time=BOUNCE,
-                       hold_time=HOLD_SEC, hold_repeat=False)
+btn_shutdown  = Button(BTN_SHUTDOWN, pull_up=True, bounce_time=BOUNCE)
 
 btn_backlight.when_pressed = enqueue(act_backlight)
 btn_power.when_pressed     = enqueue(act_power)
 btn_aux.when_pressed       = enqueue(act_aux)
-btn_shutdown.when_pressed  = enqueue(act_shutdown_hint)
-btn_shutdown.when_held     = enqueue(act_shutdown)
+# shutdown uses our own hold timing (see on_shutdown_pressed) — not when_held
+btn_shutdown.when_pressed  = on_shutdown_pressed
+btn_shutdown.when_released = on_shutdown_released
 
 
 def _terminate(signum, _frame):
